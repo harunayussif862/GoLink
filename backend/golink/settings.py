@@ -38,6 +38,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "knox",
+    "drf_spectacular",
+    "storages",
     "accounts",
 ]
 
@@ -125,3 +128,48 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Custom user model
 AUTH_USER_MODEL = "accounts.User"
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': ('knox.auth.TokenAuthentication',),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day',
+        'auth': '5/min'
+    }
+}
+
+from datetime import timedelta
+
+KNOX = {
+    'TOKEN_TTL': timedelta(days=7),
+    'AUTO_REFRESH': True,
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'GoLink API',
+    'DESCRIPTION': 'API for the GoLink multi-service platform',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True
+}
+
+# AWS S3 settings
+# In a real production environment, these should be set as environment variables
+# and not hardcoded in the settings file.
+AWS_ACCESS_KEY_ID = 'YOUR_AWS_ACCESS_KEY_ID'
+AWS_SECRET_ACCESS_KEY = 'YOUR_AWS_SECRET_ACCESS_KEY'
+AWS_STORAGE_BUCKET_NAME = 'your-s3-bucket-name'
+AWS_S3_REGION_NAME = 'your-s3-region'
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+}
+AWS_LOCATION = 'media'
+
+# Media files storage
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/'
