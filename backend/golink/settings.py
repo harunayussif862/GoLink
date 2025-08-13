@@ -43,7 +43,7 @@ INSTALLED_APPS = [
     "storages",
     "accounts",
     "wallets",
-    "rides",
+    "ride_hailing",
 ]
 
 MIDDLEWARE = [
