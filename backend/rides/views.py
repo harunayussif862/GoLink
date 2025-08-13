@@ -1,54 +1,44 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from .models import RideRequest, DriverAvailability
-from .serializers import RideRequestSerializer, DriverAvailabilitySerializer
-from .services import calculate_fare
-from django.contrib.auth import get_user_model
+from .models import DriverAvailability
+from .serializers import FareEstimateSerializer, DriverAvailabilitySerializer
+from .services import calculate_fare, get_active_pricing_rule
 from decimal import Decimal
 
-User = get_user_model()
-
-class DriverAvailabilityView(generics.UpdateAPIView):
+class FareEstimateView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = DriverAvailabilitySerializer
+    serializer_class = FareEstimateSerializer
 
-    def get_object(self):
-        # Limit choices to driver
-        if self.request.user.user_type != 'driver':
-            return None
-        obj, created = DriverAvailability.objects.get_or_create(driver=self.request.user)
-        return obj
-
-class RideRequestView(generics.CreateAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = RideRequestSerializer
-
-    def create(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
 
-        # Mock distance calculation
+        # Mock distance and time calculation
         distance = Decimal('10.5') # In a real app, this would be calculated using a mapping service
+        estimated_time = 25 # in minutes
 
-        # Calculate fare
-        fare = calculate_fare(distance)
+        pricing_rule = get_active_pricing_rule()
+        if not pricing_rule:
+            return Response({'error': 'No active pricing rule found'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Find available drivers (simplified)
-        available_drivers = DriverAvailability.objects.filter(is_available=True)
-        if not available_drivers.exists():
-            return Response({'error': 'No available drivers at the moment'}, status=status.HTTP_404_NOT_FOUND)
-
-        # For simplicity, we are not assigning a driver here.
-        # This will be handled in the ride acceptance flow.
-
-        ride_request = serializer.save(
-            rider=request.user,
-            distance=distance,
-            fare=fare
+        # Find available drivers in the requested tier
+        available_drivers = DriverAvailability.objects.filter(
+            is_available=True,
+            vehicle__isnull=False,
+            vehicle__vehicle_tier=data['vehicle_tier']
         )
 
-        # Prepare response
-        response_data = serializer.data
-        response_data['available_drivers'] = DriverAvailabilitySerializer(available_drivers, many=True).data
+        response_data = []
+        for availability in available_drivers:
+            fare = calculate_fare(
+                distance=distance,
+                estimated_time=estimated_time,
+                vehicle=availability.vehicle,
+                pricing_rule=pricing_rule
+            )
+            driver_data = DriverAvailabilitySerializer(availability).data
+            driver_data['estimated_fare'] = fare
+            response_data.append(driver_data)
 
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response(response_data, status=status.HTTP_200_OK)

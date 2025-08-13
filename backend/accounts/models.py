@@ -24,13 +24,31 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
-class RoleApplication(models.Model):
-    ROLE_CHOICES = (
-        ('driver', 'Driver'),
-        ('seller', 'Seller'),
-        ('service_provider', 'Service Provider'),
-        ('job_poster', 'Job Poster'),
+class FormField(models.Model):
+    FIELD_TYPE_CHOICES = (
+        ('text', 'Text'),
+        ('textarea', 'Text Area'),
+        ('file', 'File'),
+        ('image', 'Image'),
+        ('checkbox', 'Checkbox'),
     )
+    role_form = models.ForeignKey('RoleForm', on_delete=models.CASCADE, related_name='fields')
+    label = models.CharField(max_length=255)
+    field_type = models.CharField(max_length=20, choices=FIELD_TYPE_CHOICES)
+    required = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.label
+
+class RoleForm(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    role = models.CharField(max_length=50, unique=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+class RoleApplication(models.Model):
     STATUS_CHOICES = (
         ('pending', 'Pending'),
         ('approved', 'Approved'),
@@ -38,12 +56,11 @@ class RoleApplication(models.Model):
     )
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='role_applications')
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    role_form = models.ForeignKey(RoleForm, on_delete=models.PROTECT, null=True, blank=True)
+    form_data = models.JSONField(default=dict)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    document1 = models.FileField(upload_to='documents/')
-    document2 = models.FileField(upload_to='documents/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f'{self.user.username} - {self.get_role_display()}'
+        return f'{self.user.username} - {self.role_form.name}'

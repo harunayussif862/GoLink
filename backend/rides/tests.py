@@ -2,75 +2,98 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
-from .models import DriverAvailability, RideRequest
+from .models import Vehicle, PricingRule, DriverAvailability
 from .services import calculate_fare
 from decimal import Decimal
 
 User = get_user_model()
 
-class RideAPITests(APITestCase):
+class RideHailingTests(APITestCase):
 
-    def setUp(self):
-        self.rider = User.objects.create_user(
+    @classmethod
+    def setUpTestData(cls):
+        cls.rider = User.objects.create_user(
             username='rider',
             email='rider@example.com',
             password='password'
         )
-        self.driver_user = User.objects.create_user(
+        cls.driver_user = User.objects.create_user(
             username='driver',
             email='driver@example.com',
             password='password',
             user_type='driver',
             is_role_verified=True
         )
-        self.driver_availability = DriverAvailability.objects.create(
-            driver=self.driver_user,
+        cls.vip_driver_user = User.objects.create_user(
+            username='vip_driver',
+            email='vip_driver@example.com',
+            password='password',
+            user_type='driver',
+            is_role_verified=True
+        )
+        cls.vehicle = Vehicle.objects.create(
+            driver=cls.driver_user,
+            make='Toyota',
+            model='Camry',
+            year=2020,
+            license_plate='GZ-1234-20',
+            ac_available=True,
+            vehicle_tier='standard'
+        )
+        cls.vip_vehicle = Vehicle.objects.create(
+            driver=cls.vip_driver_user,
+            make='Mercedes',
+            model='S-Class',
+            year=2022,
+            license_plate='GZ-5678-22',
+            ac_available=True,
+            vehicle_tier='vip'
+        )
+        cls.pricing_rule, _ = PricingRule.objects.get_or_create(name='Standard')
+        cls.driver_availability = DriverAvailability.objects.create(
+            driver=cls.driver_user,
+            vehicle=cls.vehicle,
             is_available=True,
             current_lat=34.0522,
             current_lon=-118.2437
         )
-        self.ride_request_url = reverse('rides:ride_request')
-        self.driver_availability_url = reverse('rides:driver_availability')
+        cls.vip_driver_availability = DriverAvailability.objects.create(
+            driver=cls.vip_driver_user,
+            vehicle=cls.vip_vehicle,
+            is_available=True,
+            current_lat=34.0522,
+            current_lon=-118.2437
+        )
+        cls.fare_estimate_url = reverse('rides:fare_estimate')
 
-    def test_calculate_fare(self):
+    def test_pricing_service(self):
         """
-        Test the fare calculation logic.
+        Test the dynamic pricing service with different tiers.
         """
-        fare = calculate_fare(distance=10)
-        self.assertEqual(fare, Decimal('65.00')) # 15 + (10 * 5)
+        # Standard
+        fare_standard = calculate_fare(distance=10, estimated_time=20, vehicle=self.vehicle, pricing_rule=self.pricing_rule)
+        self.assertEqual(fare_standard, Decimal('90.00')) # (15 + 10*5 + 20*0.5) * 1.2
 
-        fare_ac = calculate_fare(distance=10, ac_enabled=True)
-        self.assertEqual(fare_ac, Decimal('78.00')) # 65 * 1.2
+        # VIP
+        fare_vip = calculate_fare(distance=10, estimated_time=20, vehicle=self.vip_vehicle, pricing_rule=self.pricing_rule)
+        self.assertEqual(fare_vip, Decimal('270.00')) # (15 + 10*5 + 20*0.5) * 3.0
 
-        fare_premium = calculate_fare(distance=10, vehicle_type='premium')
-        self.assertEqual(fare_premium, Decimal('97.50')) # 65 * 1.5
-
-    def test_driver_availability(self):
+    def test_fare_estimate_api(self):
         """
-        Test updating driver availability.
-        """
-        self.client.force_authenticate(user=self.driver_user)
-        data = {'is_available': False}
-        response = self.client.put(self.driver_availability_url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.driver_availability.refresh_from_db()
-        self.assertFalse(self.driver_availability.is_available)
-
-    def test_ride_request(self):
-        """
-        Test creating a ride request.
+        Test the fare estimate API endpoint with different tiers.
         """
         self.client.force_authenticate(user=self.rider)
-        data = {
-            'pickup_lat': 34.0522,
-            'pickup_lon': -118.2437,
-            'destination_lat': 34.0522,
-            'destination_lon': -118.2437,
-        }
-        response = self.client.post(self.ride_request_url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(RideRequest.objects.count(), 1)
-        ride = RideRequest.objects.first()
-        self.assertEqual(ride.rider, self.rider)
-        self.assertIn('available_drivers', response.data)
-        self.assertEqual(len(response.data['available_drivers']), 1)
+
+        # Standard tier
+        data_standard = {'pickup_lat': 34.0522, 'pickup_lon': -118.2437, 'destination_lat': 34.0522, 'destination_lon': -118.2437, 'vehicle_tier': 'standard'}
+        response_standard = self.client.post(self.fare_estimate_url, data_standard, format='json')
+        self.assertEqual(response_standard.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response_standard.data), 1)
+        self.assertEqual(response_standard.data[0]['vehicle']['vehicle_tier'], 'standard')
+
+        # VIP tier
+        data_vip = {'pickup_lat': 34.0522, 'pickup_lon': -118.2437, 'destination_lat': 34.0522, 'destination_lon': -118.2437, 'vehicle_tier': 'vip'}
+        response_vip = self.client.post(self.fare_estimate_url, data_vip, format='json')
+        self.assertEqual(response_vip.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response_vip.data), 1)
+        self.assertEqual(response_vip.data[0]['vehicle']['vehicle_tier'], 'vip')
