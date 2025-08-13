@@ -65,3 +65,11 @@ class RoleApplication(models.Model):
 
     def __str__(self):
         return f'{self.user.username} - {self.role_form.name}'
+
+class RoleApplicationFile(models.Model):
+    application = models.ForeignKey(RoleApplication, on_delete=models.CASCADE, related_name='files')
+    file = models.FileField(upload_to='role_applications/')
+    field_name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"File for {self.application}"

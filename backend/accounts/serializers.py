@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import RoleApplication
+from .models import RoleApplication, RoleForm, RoleApplicationFile
+import json
 
 User = get_user_model()
 
@@ -46,21 +47,29 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         return user
 
+class RoleApplicationFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoleApplicationFile
+        fields = ('file', 'field_name')
+
 class RoleApplicationSerializer(serializers.ModelSerializer):
+    files = RoleApplicationFileSerializer(many=True, read_only=True)
+
     class Meta:
         model = RoleApplication
-        fields = ('id', 'role', 'document1', 'document2', 'status', 'created_at')
-        read_only_fields = ('status', 'created_at')
+        fields = ('id', 'role_form', 'form_data', 'status', 'created_at', 'files')
+        read_only_fields = ('status', 'created_at', 'files')
 
     def create(self, validated_data):
-        user = self.context['request'].user
-        application = RoleApplication.objects.create(user=user, **validated_data)
-        return application
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
 
 class RoleApplicationAdminSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    role_form = serializers.StringRelatedField()
+    files = RoleApplicationFileSerializer(many=True, read_only=True)
 
     class Meta:
         model = RoleApplication
-        fields = ('id', 'user', 'role', 'document1', 'document2', 'status', 'created_at')
-        read_only_fields = ('user', 'role', 'document1', 'document2', 'created_at')
+        fields = ('id', 'user', 'role_form', 'form_data', 'status', 'created_at', 'files')
+        read_only_fields = ('user', 'role_form', 'form_data', 'created_at', 'files')

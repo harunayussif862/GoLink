@@ -1,10 +1,15 @@
+import pytest
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
-from .models import Vehicle, PricingRule, DriverAvailability
+from .models import Vehicle, PricingRule, DriverAvailability, RideRequest
 from .services import calculate_fare
 from decimal import Decimal
+from wallets.models import Wallet
+from channels.testing import WebsocketCommunicator
+from .consumers import RideLocationConsumer
+from golink.asgi import application
 
 User = get_user_model()
 
@@ -97,3 +102,95 @@ class RideHailingTests(APITestCase):
         self.assertEqual(response_vip.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response_vip.data), 1)
         self.assertEqual(response_vip.data[0]['vehicle']['vehicle_tier'], 'vip')
+
+
+class RideLifecycleAPITests(APITestCase):
+
+    def setUp(self):
+        self.rider = User.objects.create_user(username='rider', email='rider@example.com', password='password')
+        self.driver = User.objects.create_user(username='driver', email='driver@example.com', password='password', user_type='driver', is_role_verified=True)
+        self.rider_wallet = Wallet.objects.get(user=self.rider)
+        self.rider_wallet.balance = 500
+        self.rider_wallet.save()
+        self.ride = RideRequest.objects.create(
+            rider=self.rider,
+            pickup_lat=34.0522,
+            pickup_lon=-118.2437,
+            destination_lat=34.0522,
+            destination_lon=-118.2437,
+            fare=100.00
+        )
+
+    def test_accept_ride(self):
+        """
+        Ensure a driver can accept a ride request.
+        """
+        self.client.force_authenticate(user=self.driver)
+        url = reverse('rides:rides-accept', kwargs={'pk': self.ride.pk})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.ride.refresh_from_db()
+        self.assertEqual(self.ride.status, 'accepted')
+        self.assertEqual(self.ride.driver, self.driver)
+
+    def test_start_ride(self):
+        """
+        Ensure a driver can start an accepted ride.
+        """
+        self.ride.driver = self.driver
+        self.ride.status = 'accepted'
+        self.ride.save()
+        self.client.force_authenticate(user=self.driver)
+        url = reverse('rides:rides-start', kwargs={'pk': self.ride.pk})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.ride.refresh_from_db()
+        self.assertEqual(self.ride.status, 'in_progress')
+
+    def test_end_ride(self):
+        """
+        Ensure a driver can end a ride and payment is processed.
+        """
+        self.ride.driver = self.driver
+        self.ride.status = 'in_progress'
+        self.ride.save()
+        self.client.force_authenticate(user=self.driver)
+        # Create GoLink platform user for commission
+        User.objects.create_superuser(username='golink_platform', email='platform@golink.com', password='password')
+        url = reverse('rides:rides-end', kwargs={'pk': self.ride.pk})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.ride.refresh_from_db()
+        self.assertEqual(self.ride.status, 'completed')
+
+        self.rider_wallet.refresh_from_db()
+        self.assertEqual(self.rider_wallet.balance, 400) # 500 - 100
+
+        driver_wallet = Wallet.objects.get(user=self.driver)
+        self.assertEqual(driver_wallet.balance, 85) # 100 - 15 (15% commission)
+
+
+@pytest.mark.asyncio
+class RideLocationConsumerTests(APITestCase):
+
+    async def test_ride_location_consumer(self):
+        ride = RideRequest.objects.create(
+            rider=User.objects.create_user(username='rider_consumer', email='rider_consumer@example.com', password='password'),
+            pickup_lat=34.0522,
+            pickup_lon=-118.2437,
+            destination_lat=34.0522,
+            destination_lon=-118.2437,
+        )
+        communicator = WebsocketCommunicator(application, f"/ws/rides/{ride.id}/location/")
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+
+        # Test sending a location update
+        await communicator.send_json_to({'lat': 34.0522, 'lon': -118.2437})
+        response = await communicator.receive_json_from()
+        self.assertEqual(response['lat'], 34.0522)
+        self.assertEqual(response['lon'], -118.2437)
+
+        # Close the connection
+        await communicator.disconnect()

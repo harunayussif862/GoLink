@@ -1,3 +1,4 @@
+import json
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -5,7 +6,7 @@ from django.contrib.auth import get_user_model
 from knox.models import AuthToken
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from .models import RoleApplication
+from .models import RoleApplication, RoleForm, FormField, RoleApplicationFile
 
 User = get_user_model()
 
@@ -118,53 +119,67 @@ class AuthAPITests(APITestCase):
 
 class RoleApplicationAPITests(APITestCase):
 
-    def setUp(self):
-        self.apply_url = reverse('accounts:role_apply')
-        self.user = User.objects.create_user(
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
             password='testpassword'
         )
+        cls.role_form = RoleForm.objects.create(name='Driver Application', role='driver')
+        FormField.objects.create(role_form=cls.role_form, label='License Number', field_type='text')
+        FormField.objects.create(role_form=cls.role_form, label='License Document', field_type='file')
+
+    def setUp(self):
+        self.apply_url = reverse('accounts:role_apply')
         self.client.force_authenticate(user=self.user)
 
     def test_apply_for_role(self):
         """
         Ensure an authenticated user can apply for a role.
         """
-        # Create a dummy file
-        document = SimpleUploadedFile("file.txt", b"file_content", content_type="text/plain")
+        document = SimpleUploadedFile("license.txt", b"file_content", content_type="text/plain")
+        form_data = {
+            'License Number': '12345',
+        }
         data = {
-            'role': 'driver',
-            'document1': document
+            'role_form': self.role_form.id,
+            'form_data': json.dumps(form_data),
+            'License Document': document
         }
         response = self.client.post(self.apply_url, data, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(RoleApplication.objects.count(), 1)
         application = RoleApplication.objects.first()
         self.assertEqual(application.user, self.user)
-        self.assertEqual(application.role, 'driver')
+        self.assertEqual(application.role_form, self.role_form)
         self.assertEqual(application.status, 'pending')
+        self.assertEqual(application.files.count(), 1)
 
 
 class RoleApplicationAdminAPITests(APITestCase):
 
-    def setUp(self):
-        self.list_url = reverse('accounts:admin_roles-list')
-        self.user = User.objects.create_user(
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
             password='testpassword'
         )
-        self.admin_user = User.objects.create_superuser(
+        cls.admin_user = User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
             password='adminpassword'
         )
-        self.application = RoleApplication.objects.create(
-            user=self.user,
-            role='driver',
-            document1=SimpleUploadedFile("file.txt", b"file_content", content_type="text/plain")
+        cls.role_form = RoleForm.objects.create(name='Driver Application', role='driver')
+        cls.application = RoleApplication.objects.create(
+            user=cls.user,
+            role_form=cls.role_form,
+            form_data={'License Number': '12345'}
         )
+
+    def setUp(self):
+        self.list_url = reverse('accounts:admin_roles-list')
         self.detail_url = reverse('accounts:admin_roles-detail', kwargs={'pk': self.application.pk})
 
     def test_list_applications_as_admin(self):
