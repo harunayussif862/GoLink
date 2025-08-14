@@ -49,17 +49,28 @@ class RoleForm(models.Model):
     def __str__(self):
         return self.name
 
+from .validators import validate_file_extension, validate_file_size
+
+
 class RoleApplication(models.Model):
     STATUS_CHOICES = (
         ('pending', 'Pending'),
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
     )
+    VERIFICATION_STATUS_CHOICES = (
+        ('not_started', 'Not Started'),
+        ('in_progress', 'In Progress'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+    )
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='role_applications')
     role_form = models.ForeignKey(RoleForm, on_delete=models.PROTECT, null=True, blank=True)
     form_data = models.JSONField(default=dict)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUS_CHOICES, default='not_started')
+    verification_details = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -68,7 +79,7 @@ class RoleApplication(models.Model):
 
 class RoleApplicationFile(models.Model):
     application = models.ForeignKey(RoleApplication, on_delete=models.CASCADE, related_name='files')
-    file = models.FileField(upload_to='role_applications/')
+    file = models.FileField(upload_to='role_applications/', validators=[validate_file_extension, validate_file_size])
     field_name = models.CharField(max_length=255)
 
     def __str__(self):

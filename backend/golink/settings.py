@@ -43,6 +43,10 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "storages",
     "channels",
+    "django_otp",
+    "django_otp.plugins.otp_static",
+    "django_otp.plugins.otp_totp",
+    "two_factor",
     "accounts",
     "wallets",
     "rides",
@@ -56,6 +60,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "django_otp.middleware.OTPMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -143,7 +148,8 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/day',
         'user': '1000/day',
-        'auth': '5/min'
+        'auth': '5/min',
+        'password_change': '5/hour',
     }
 }
 
@@ -189,3 +195,8 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+# Two-factor authentication
+LOGIN_URL = 'two_factor:login'
+LOGIN_REDIRECT_URL = '/'
+TWO_FACTOR_PATCH_ADMIN = True

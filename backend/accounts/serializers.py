@@ -73,3 +73,15 @@ class RoleApplicationAdminSerializer(serializers.ModelSerializer):
         model = RoleApplication
         fields = ('id', 'user', 'role_form', 'form_data', 'status', 'created_at', 'files')
         read_only_fields = ('user', 'role_form', 'form_data', 'created_at', 'files')
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password1 = serializers.CharField(required=True)
+    new_password2 = serializers.CharField(required=True)
+    otp_code = serializers.CharField(required=False, min_length=6, max_length=6)
+
+    def validate(self, data):
+        if data['new_password1'] != data['new_password2']:
+            raise serializers.ValidationError({"new_password2": "Passwords do not match."})
+        return data

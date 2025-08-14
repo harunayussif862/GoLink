@@ -37,3 +37,14 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f'{self.get_transaction_type_display()} of {self.amount} for {self.wallet.user.username}'
+
+
+class WalletTransactionOTP(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    wallet = models.ForeignKey('Wallet', on_delete=models.CASCADE, related_name='otp_transactions')
+    transaction_type = models.CharField(max_length=20) # e.g., 'transfer', 'withdrawal'
+    transaction_details = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Pending {self.transaction_type} for {self.wallet.user.username}"

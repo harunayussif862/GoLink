@@ -179,3 +179,134 @@ class CommissionTests(APITestCase):
         self.assertEqual(self.golink_wallet.balance, 20)
 
         self.assertEqual(Transaction.objects.filter(transaction_type='commission').count(), 2)
+
+
+from rest_framework.test import APITransactionTestCase
+from django_otp.plugins.otp_totp.models import TOTPDevice
+from django_otp.util import random_hex
+import pyotp
+import base64
+from django.db import connection
+
+
+class WalletOTPTests(APITransactionTestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='testuser_otp',
+            email='otp@example.com',
+            password='testpassword'
+        )
+        self.client.force_authenticate(user=self.user)
+        self.wallet = Wallet.objects.get(user=self.user)
+        self.wallet.balance = 500
+        self.wallet.save()
+
+        self.recipient = User.objects.create_user(
+            username='recipient_otp',
+            email='recipient_otp@example.com',
+            password='testpassword'
+        )
+        self.recipient_wallet = Wallet.objects.get(user=self.recipient)
+
+        self.transfer_url = reverse('wallets:transfer')
+        self.verify_otp_url = reverse('wallets:verify_otp')
+
+    def _create_confirmed_device(self):
+        """
+        Helper to create and commit a confirmed TOTPDevice for self.user.
+        """
+        device = TOTPDevice.objects.create(
+            user=self.user,
+            name="default",
+            confirmed=True,
+            key=random_hex()
+        )
+        connection.commit()
+        return device
+
+    def test_transfer_requires_otp(self):
+        """
+        Test that initiating a transfer requires OTP if 2FA is enabled.
+        """
+        self._create_confirmed_device()
+
+        data = {
+            'recipient_wallet_id': str(self.recipient_wallet.wallet_id),
+            'amount': '100.00'
+        }
+        response = self.client.post(self.transfer_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('otp_required'))
+        self.assertIn('otp_transaction_id', response.data)
+
+    def test_transfer_no_2fa(self):
+        """
+        Test that a transfer fails if the user has no 2FA device.
+        """
+        data = {
+            'recipient_wallet_id': str(self.recipient_wallet.wallet_id),
+            'amount': '100.00'
+        }
+        response = self.client.post(self.transfer_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('2FA is not enabled', response.data['error'])
+
+    def test_transfer_with_valid_otp(self):
+        """
+        Test completing a transfer with a valid OTP.
+        """
+        device = self._create_confirmed_device()
+
+        # Step 1: Initiate transfer
+        init_data = {
+            'recipient_wallet_id': str(self.recipient_wallet.wallet_id),
+            'amount': '100.00'
+        }
+        init_response = self.client.post(self.transfer_url, init_data, format='json')
+        otp_transaction_id = init_response.data['otp_transaction_id']
+
+        # Step 2: Verify OTP
+        secret_b32 = base64.b32encode(bytes.fromhex(device.key)).decode()
+        otp_code = pyotp.TOTP(secret_b32).now()
+
+        verify_data = {
+            'otp_transaction_id': otp_transaction_id,
+            'otp_code': otp_code
+        }
+        verify_response = self.client.post(self.verify_otp_url, verify_data, format='json')
+
+        self.assertEqual(verify_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(verify_response.data['message'], 'Transfer successful')
+
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance, 400)
+        self.recipient_wallet.refresh_from_db()
+        self.assertEqual(self.recipient_wallet.balance, 100)
+
+    def test_transfer_with_invalid_otp(self):
+        """
+        Test that completing a transfer with an invalid OTP fails.
+        """
+        self._create_confirmed_device()
+
+        # Step 1: Initiate transfer
+        init_data = {
+            'recipient_wallet_id': str(self.recipient_wallet.wallet_id),
+            'amount': '100.00'
+        }
+        init_response = self.client.post(self.transfer_url, init_data, format='json')
+        otp_transaction_id = init_response.data['otp_transaction_id']
+
+        # Step 2: Verify with invalid OTP
+        verify_data = {
+            'otp_transaction_id': otp_transaction_id,
+            'otp_code': '123456'
+        }
+        verify_response = self.client.post(self.verify_otp_url, verify_data, format='json')
+
+        self.assertEqual(verify_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Invalid OTP code', verify_response.data['error'])
+
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance, 500) # Balance should not have changed

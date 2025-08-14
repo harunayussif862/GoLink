@@ -20,3 +20,7 @@ class WithdrawalSerializer(serializers.Serializer):
 class TransferSerializer(serializers.Serializer):
     recipient_wallet_id = serializers.UUIDField()
     amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+class VerifyWalletOTPSerializer(serializers.Serializer):
+    otp_transaction_id = serializers.UUIDField()
+    otp_code = serializers.CharField(min_length=6, max_length=6)
