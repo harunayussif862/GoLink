@@ -128,7 +128,13 @@ class RoleApplicationAdminViewSet(viewsets.ModelViewSet):
         application = serializer.instance
         if serializer.validated_data.get('status') == 'approved':
             user = application.user
-            user.user_type = application.role_form.role
+
+            if application.role_form.role == 'vip_employer':
+                user.user_type = 'job_poster'
+                user.is_vip_employer = True
+            else:
+                user.user_type = application.role_form.role
+
             user.is_role_verified = True
             user.save()
         serializer.save()

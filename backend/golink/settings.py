@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "knox",
+    "django_filters",
     "drf_spectacular",
     "storages",
     "channels",
@@ -51,6 +52,7 @@ INSTALLED_APPS = [
     "wallets",
     "rides",
     "ecommerce",
+    "jobs",
 ]
 
 MIDDLEWARE = [
