@@ -76,3 +76,27 @@ class RideRequest(models.Model):
 
     def __str__(self):
         return f"Ride for {self.rider.username} - {self.status}"
+
+class Review(models.Model):
+    ride = models.ForeignKey(RideRequest, on_delete=models.CASCADE, related_name='reviews')
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='given_reviews')
+    reviewed = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_reviews')
+    rating = models.PositiveIntegerField() # 1-5
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('ride', 'reviewer')
+
+    def __str__(self):
+        return f"Review for Ride {self.ride.id} by {self.reviewer.username}"
+
+class Report(models.Model):
+    ride = models.ForeignKey(RideRequest, on_delete=models.CASCADE, related_name='reports')
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reported_rides')
+    reason = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Report for Ride {self.ride.id} by {self.reporter.username}"

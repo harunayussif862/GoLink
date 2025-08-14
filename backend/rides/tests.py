@@ -1,9 +1,10 @@
 import pytest
+import pytest
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
-from .models import Vehicle, PricingRule, DriverAvailability, RideRequest
+from .models import Vehicle, PricingRule, DriverAvailability, RideRequest, Review, Report
 from .services import calculate_fare
 from decimal import Decimal
 from wallets.models import Wallet
@@ -169,6 +170,46 @@ class RideLifecycleAPITests(APITestCase):
 
         driver_wallet = Wallet.objects.get(user=self.driver)
         self.assertEqual(driver_wallet.balance, 85) # 100 - 15 (15% commission)
+
+
+class RideFeedbackAPITests(APITestCase):
+
+    def setUp(self):
+        self.rider = User.objects.create_user(username='rider', email='rider@example.com', password='password')
+        self.driver = User.objects.create_user(username='driver', email='driver@example.com', password='password', user_type='driver', is_role_verified=True)
+        self.ride = RideRequest.objects.create(
+            rider=self.rider,
+            driver=self.driver,
+            status='completed',
+            fare=100.00
+        )
+
+    def test_create_review(self):
+        """
+        Ensure a user can create a review for a completed ride.
+        """
+        self.client.force_authenticate(user=self.rider)
+        url = reverse('rides:ride-reviews-list', kwargs={'ride_pk': self.ride.pk})
+        data = {'rating': 5, 'comment': 'Great ride!'}
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Review.objects.count(), 1)
+        review = Review.objects.first()
+        self.assertEqual(review.reviewer, self.rider)
+        self.assertEqual(review.reviewed, self.driver)
+
+    def test_create_report(self):
+        """
+        Ensure a user can create a report for a ride.
+        """
+        self.client.force_authenticate(user=self.rider)
+        url = reverse('rides:ride-reports-list', kwargs={'ride_pk': self.ride.pk})
+        data = {'reason': 'Driver was rude'}
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Report.objects.count(), 1)
+        report = Report.objects.first()
+        self.assertEqual(report.reporter, self.rider)
 
 
 @pytest.mark.asyncio

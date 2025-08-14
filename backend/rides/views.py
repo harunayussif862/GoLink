@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
 from django.db import transaction, models
-from .models import RideRequest, DriverAvailability
-from .serializers import RideRequestSerializer, DriverAvailabilitySerializer, FareEstimateSerializer
+from .models import RideRequest, DriverAvailability, Review, Report
+from .serializers import RideRequestSerializer, DriverAvailabilitySerializer, FareEstimateSerializer, ReviewSerializer, ReportSerializer
 from .services import calculate_fare, get_active_pricing_rule
 from wallets.models import Wallet
 from wallets.utils import handle_commission
@@ -92,6 +92,29 @@ class RideRequestViewSet(viewsets.ModelViewSet):
         ride.accepted_at = timezone.now()
         ride.save()
         return Response(self.get_serializer(ride).data)
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Review.objects.filter(ride_id=self.kwargs['ride_pk'])
+
+    def perform_create(self, serializer):
+        ride = RideRequest.objects.get(pk=self.kwargs['ride_pk'])
+        reviewed_user = ride.driver if self.request.user == ride.rider else ride.rider
+        serializer.save(reviewer=self.request.user, reviewed=reviewed_user, ride=ride)
+
+class ReportViewSet(viewsets.ModelViewSet):
+    serializer_class = ReportSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Report.objects.filter(ride_id=self.kwargs['ride_pk'])
+
+    def perform_create(self, serializer):
+        ride = RideRequest.objects.get(pk=self.kwargs['ride_pk'])
+        serializer.save(reporter=self.request.user, ride=ride)
 
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):

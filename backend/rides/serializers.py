@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import RideRequest, DriverAvailability, Vehicle
+from .models import RideRequest, DriverAvailability, Vehicle, Review, Report
 from accounts.serializers import UserSerializer
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -26,3 +26,15 @@ class FareEstimateSerializer(serializers.Serializer):
     destination_lat = serializers.DecimalField(max_digits=9, decimal_places=6)
     destination_lon = serializers.DecimalField(max_digits=9, decimal_places=6)
     vehicle_tier = serializers.ChoiceField(choices=Vehicle.VEHICLE_TIER_CHOICES)
+
+class ReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = ('id', 'ride', 'rating', 'comment', 'created_at')
+        read_only_fields = ('reviewer', 'reviewed')
+
+class ReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Report
+        fields = ('id', 'ride', 'reason', 'description', 'created_at')
+        read_only_fields = ('reporter',)
