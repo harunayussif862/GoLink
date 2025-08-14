@@ -1,0 +1,9 @@
+{% load i18n %}
+{% blocktrans with employer_name=employer_name %}Hi {{ employer_name }},{% endblocktrans %}
+
+{% blocktrans with applicant_name=applicant_name job_title=job_title %}You have received a new application from {{ applicant_name }} for your job posting: "{{ job_title }}".{% endblocktrans %}
+
+{% blocktrans %}You can review the application in your employer dashboard.{% endblocktrans %}
+
+{% blocktrans %}Thanks,{% endblocktrans %}
+{% blocktrans %}The GoLink Team{% endblocktrans %}

@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "rides",
     "ecommerce",
     "jobs",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -152,6 +153,7 @@ REST_FRAMEWORK = {
         'user': '1000/day',
         'auth': '5/min',
         'password_change': '5/hour',
+        'job_apply': '5/hour',
     }
 }
 

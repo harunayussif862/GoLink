@@ -20,6 +20,19 @@ class IsJobOwner(permissions.BasePermission):
         # so we'll always allow GET, HEAD or OPTIONS requests.
         if request.method in permissions.SAFE_METHODS:
             return True
-
         # Write permissions are only allowed to the owner of the job.
         return obj.employer == request.user
+
+class IsApplicant(permissions.BasePermission):
+    """
+    Allows access only to the user who submitted the application.
+    """
+    def has_object_permission(self, request, view, obj):
+        return obj.applicant == request.user
+
+class IsJobOwnerOfApplication(permissions.BasePermission):
+    """
+    Allows access only to the user who owns the job associated with the application.
+    """
+    def has_object_permission(self, request, view, obj):
+        return obj.job.employer == request.user
