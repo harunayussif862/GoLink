@@ -1,0 +1,9 @@
+{% load i18n %}
+{% blocktrans with applicant_name=applicant_name %}Hi {{ applicant_name }},{% endblocktrans %}
+
+{% blocktrans with job_title=job_title new_status=new_status %}The status of your application for the position "{{ job_title }}" has been updated to: {{ new_status }}.{% endblocktrans %}
+
+{% blocktrans %}You can view the details in your applicant dashboard.{% endblocktrans %}
+
+{% blocktrans %}Thanks,{% endblocktrans %}
+{% blocktrans %}The GoLink Team{% endblocktrans %}

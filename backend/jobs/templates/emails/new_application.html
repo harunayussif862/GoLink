@@ -1,0 +1,16 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% trans "New Job Application" %}</title>
+</head>
+<body>
+    <p>{% blocktrans with employer_name=employer_name %}Hi {{ employer_name }},{% endblocktrans %}</p>
+    <p>{% blocktrans with applicant_name=applicant_name job_title=job_title %}You have received a new application from <strong>{{ applicant_name }}</strong> for your job posting: <strong>"{{ job_title }}"</strong>.{% endblocktrans %}</p>
+    <p>{% blocktrans %}You can review the application in your employer dashboard.{% endblocktrans %}</p>
+    <p>
+        {% blocktrans %}Thanks,{% endblocktrans %}<br>
+        {% blocktrans %}The GoLink Team{% endblocktrans %}
+    </p>
+</body>
+</html>
