@@ -9,6 +9,15 @@ class IsVipEmployer(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.is_vip_employer
 
+class IsJobPoster(permissions.BasePermission):
+    """
+    Allows access only to users who are verified Job Posters (standard or VIP).
+    """
+    message = 'Only verified employers can post jobs.'
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.user_type == 'job_poster'
+
 class IsJobOwner(permissions.BasePermission):
     """
     Allows access only to the user who owns the job posting.

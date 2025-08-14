@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from .validators import validate_file_extension_pdf, validate_file_size_10mb
 
 class JobCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -19,8 +20,13 @@ class Job(models.Model):
     )
     STATUS_CHOICES = (
         ('draft', 'Draft'),
+        ('pending_review', 'Pending Review'),
         ('published', 'Published'),
         ('archived', 'Archived'),
+    )
+    TIER_CHOICES = (
+        ('standard', 'Standard'),
+        ('vip', 'VIP'),
     )
 
     employer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='jobs')
@@ -31,23 +37,16 @@ class Job(models.Model):
     location = models.CharField(max_length=255, blank=True, null=True)
     job_type = models.CharField(max_length=20, choices=JOB_TYPE_CHOICES)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
-    vip_only = models.BooleanField(default=True)
+    tier = models.CharField(max_length=20, choices=TIER_CHOICES, default='standard')
+    vip_only = models.BooleanField(default=True) # Kept for backward compatibility or specific VIP features
+    is_featured = models.BooleanField(default=False)
+    featured_until = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.title} by {self.employer.username}"
 
-
-class JobApplication(models.Model):
-    STATUS_CHOICES = (
-        ('pending', 'Pending'),
-        ('shortlisted', 'Shortlisted'),
-        ('rejected', 'Rejected'),
-        ('hired', 'Hired'),
-    )
-
-from .validators import validate_file_extension_pdf, validate_file_size_10mb
 
 class JobApplication(models.Model):
     STATUS_CHOICES = (
@@ -87,10 +86,22 @@ class ApplicationNote(models.Model):
 class AuditEvent(models.Model):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     object_type = models.CharField(max_length=100)
-    object_id = models.CharField(max_length=255) # Using CharField for flexibility (UUIDs or ints)
+    object_id = models.CharField(max_length=255)
     action = models.CharField(max_length=100)
     metadata = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.action} on {self.object_type} {self.object_id} by {self.actor.username if self.actor else 'System'}"
+
+
+class FeaturedPricing(models.Model):
+    price_per_day = models.DecimalField(max_digits=10, decimal_places=2)
+    min_days = models.PositiveIntegerField(default=1)
+    max_days = models.PositiveIntegerField(default=30)
+
+    def __str__(self):
+        return f"Featured Job Pricing: ${self.price_per_day}/day"
+
+    class Meta:
+        verbose_name_plural = "Featured Pricing"

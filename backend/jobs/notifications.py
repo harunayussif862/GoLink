@@ -65,3 +65,39 @@ def send_application_status_update_notification(application):
         html_message=html_message,
         fail_silently=True
     )
+
+
+def send_job_status_update_notification(job):
+    """
+    Notifies an employer that their job post's status has been updated by an admin.
+    """
+    employer = job.employer
+
+    Notification.objects.create(
+        recipient=employer,
+        message=f"The status of your job posting '{job.title}' has been updated to '{job.get_status_display()}'."
+    )
+    # TODO: Add email notification
+
+
+def send_job_featured_notification(job):
+    """
+    Notifies an employer that their job has been successfully featured.
+    """
+    employer = job.employer
+    Notification.objects.create(
+        recipient=employer,
+        message=f"Your job posting '{job.title}' is now featured until {job.featured_until.strftime('%Y-%m-%d %H:%M')}."
+    )
+    # TODO: Add email notification
+
+def send_feature_expiring_notification(job):
+    """
+    Notifies an employer that their featured job is expiring soon.
+    """
+    employer = job.employer
+    Notification.objects.create(
+        recipient=employer,
+        message=f"Your featured job posting '{job.title}' is expiring soon."
+    )
+    # TODO: Add email notification
